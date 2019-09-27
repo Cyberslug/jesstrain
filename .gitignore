@@ -1,3 +1,14 @@
+# DKG added files and directories
+Team 17/
+Analysis code/
+.idea/
+*.csv
+*.docx
+*.pptx
+*.txt
+*.xml
+*.iml
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
