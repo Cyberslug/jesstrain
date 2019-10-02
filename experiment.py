@@ -4,7 +4,7 @@
 # @Version : 0.0
 # @Date : 2019-10-02-08-36
 # @Project: jesstrain
-# @AUTHOR : david & JI
+# @AUTHOR : david & jessir
 # import
 # I suggest that we do not increment the version number until we have a basic version entered and minimally functional
 # Version 0 is typically the initial version and major versions (i.e. 0.x) indicate addition of significant features,
