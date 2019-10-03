@@ -10,11 +10,11 @@
 # Version 0 is typically the initial version and major versions (i.e. 0.x) indicate addition of significant features,
 # minor versions (i.e. x.0) indicate fixes to existing functionality
 
-class Experiment:
-    '''
+class Session:
+    """
     Holds all data relating to a specific experiment instance
     Note: Placeholder only
-    '''
+    """
     # NOTE: I decided to use **kwargs argument here as it was not clear the extent of arguments require
     def __init__(self, **kwargs):
         pass
@@ -23,6 +23,11 @@ class Experiment:
     # useful anywhere else. Note that this just returns the values on the fly, no need to store these.
     def process_data(self):
         pass
+
+    def _load_data(self):
+        """ Load data from a series of csv files"""
+        pass
+
 
 
 if __name__ == '__main__':

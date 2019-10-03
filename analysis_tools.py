@@ -5,7 +5,6 @@
 # @Date : 2019-04-13-17-57
 # @Project: jesstrain
 # @AUTHOR : david & jessir
-# -*- coding: utf-8 -*-
 """
 Functions for use with CRUSE data analysis
 """
