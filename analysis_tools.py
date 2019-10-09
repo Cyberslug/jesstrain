@@ -4,11 +4,12 @@
 # @Version : 0.0
 # @Date : 2019-04-13-17-57
 # @Project: jesstrain
-# @AUTHOR : david & jessir
+# @AUTHOR
+# : david & jessir
 """
 Functions for use with CRUSE data analysis
 """
-from numpy import sqrt
+from numpy import linalg
 
 
 def bearingError(b1, b2):
@@ -20,8 +21,9 @@ def bearingError(b1, b2):
 
 
 def positionError(x1, x2, y1, y2):
-    """Euclidean distance between 2 points - could be done with numpy.linalg.norm(a-b)"""
-    pe = sqrt((x1-x2)**2 + (y1-y2)**2)
+    """Euclidean distance between 2 points"""
+    pe = linalg.norm([(x1 - x2), (y1 - y2)])
+    # pe = sqrt((x1-x2)**2 + (y1-y2)**2)
     return pe
 
 
@@ -33,14 +35,14 @@ def get_sec(time_str):
 
 if __name__ == '__main__':
     '''Example test code - this is overkill but hey'''
-    assert(bearingError(360, 1) == 1.0)  # Test difference > 180
-    assert(bearingError(361, 0) == 1.0)  # Test any angle
-    assert(bearingError(0., 0.11) == 0.11)  # Test floating point
-    assert(positionError(1, 0, 0, 0) == 1)  # Basic coordinate test
-    assert(positionError(0, 1, 0, 0) == 1)  # Basic coordinate test
-    assert(positionError(0, 0, 1, 0) == 1)  # Basic coordinate test
-    assert(positionError(0, 0, 0, 1) == 1)  # Basic coordinate test
-    assert(get_sec('00:00:01') == 1)
-    assert(get_sec('00:01:00') == 60)
-    assert(get_sec('01:00:00') == 3600)
-    assert(get_sec('03:01:06') == 10866)
+    assert (bearingError(360, 1) == 1.0)  # Test difference > 180
+    assert (bearingError(361, 0) == 1.0)  # Test any angle
+    assert (bearingError(0., 0.11) == 0.11)  # Test floating point
+    assert (positionError(1, 0, 0, 0) == 1)  # Basic coordinate test
+    assert (positionError(0, 1, 0, 0) == 1)  # Basic coordinate test
+    assert (positionError(0, 0, 1, 0) == 1)  # Basic coordinate test
+    assert (positionError(0, 0, 0, 1) == 1)  # Basic coordinate test
+    assert (get_sec('00:00:01') == 1)
+    assert (get_sec('00:01:00') == 60)
+    assert (get_sec('01:00:00') == 3600)
+    assert (get_sec('03:01:06') == 10866)
