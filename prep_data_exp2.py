@@ -1,70 +1,89 @@
+#!/usr/bin/env python
 # -*- coding: utf-8 -*-
-"""
-Created on Fri Apr 13 2019
+# @Filename : prep_data_exp2.py
+# @Version : 2.1
+# @Date : 2019-10-13-14-52
+# @Project: jesstrain
+# @AUTHOR
+# : jessir
+'''
+Removes some hardcoding of differences across experiments
+'''
 
-Cleans individual scenario data
-- Converts units across all files
-- Calculates position error for each solution
-
-@author: ironsj
-"""
 import numpy as np
 import pandas as pd
 import os
+#import sys
+from glob import glob
+from analysis_tools import bearingError, positionError
 
-# User parameters
-teams = range(19,28+1) # Teams list
-sessions = range(1,2+1) # Sessions per team
+code_directory = ('C:\\Users\\jesir\\PycharmProjects\jesstrain')
+os.chdir(code_directory)
+
+# Set the directory
+# Get code path - currently inside jesstrain
+##code_directory = os.path.dirname(sys.argv[0])  #Note this won't work when typed into console
+##os.chdir(code_directory)
+# Change directory to data folder
+os.chdir('..')
+os.chdir('data')
+data_directory = os.getcwd()
+
+# Get list of team folders and team numbers
+team_folder_list = glob('Team*')
+
+df_condlist = pd.read_csv('condlist.csv')
+df_sst = pd.read_csv('Sonar_start_time.csv')  # Get sonar start times
+
+# Set up variables used for all analysis
+sessions = [1,2]
 exclRToutliers = True #set to 1 to exclude solutions that are made too quickly from last solution
 exclsonaroutliers = True # set to 1 to exclude any solutions that set the range beyond what sonar can detect   
 exclbearoutliers = True # set to 1 to exclude any solutions with bearing errors outside bearerrmax    
 endtime = 3700  # total number of seconds to look at
+tpdur = 20  # number of seconds per time point
+tpnum = int(endtime / tpdur)
+ypm = 33.756  # Yards per minute travelling at 1 knot = 33.756
+pointsrange = .33  # Solution must be within this proportion of range in order # to score a point
+zigdegrees = 30  # How many degrees change in course to qualify for a zig
+sonarrange = 30000  # Max range for detection (as told to participants)
+bearerrmax = 20  # bearing errors outside of this considered outliers
+minRT = 10  # minimum allowable time since last solution
+# Weights from highest 3 to lowest 1 CLASSIFICATION BELOW
+classification_weights_dict = {'Warship': 3, 'Fishing': 2, 'Merchant': 1}
+rangeweightdict = {5000: 3, 10000: 2, 15000: 1}
+courseweightdict = {'Closing': 3, 'Opening': 1}
+zigweightdict = {'Zigging': 3, 'Notzigging': 1}
 
-condcols = ['Team','Session','Integration', 'DRT']  
-maindir = ('D:\\Documents\\DST\\CRUSE Study 2\\Data')
-os.chdir(maindir)
-df_condlist = pd.read_csv('condlist.csv')
-df_sst = pd.read_csv('Sonar_start_time.csv') # Get sonar start times
+firstcompleted = 0
 
 # Save any flagged issues in this file in the main directory
-flagfile = open('flagfile.txt','w')       
+flagfile = open('flagfile.txt', 'w')
 
-# Set up variables used for all analysis
-tpdur = 20 # number of seconds per time point
-tpnum = int(endtime/tpdur)
-ypm = 33.756 # Yards per minute travelling at 1 knot = 33.756
-pointsrange = .33 # Solution must be within this proportion of range in order # to score a point
-zigdegrees = 30 # How many degrees change in course to qualify for a zig
-sonarrange = 30000 # Max range for detection (as told to participants)
-bearerrmax = 20 # bearing errors outside of this considered outliers
-minRT = 10 # minimum allowable time since last solution 
-# Weights from highest 3 to lowest 1
-classweightdict = {'Warship A':3,'Fishing A':2,'Merchant A':1, 'Merchant B':1,'Merchant C':1} 
-rangeweightdict = {5000:3,10000:2,15000:1}
-courseweightdict = {'Closing':3,'Opening':1}
-zigweightdict = {'Zigging':3,'Notzigging':1}
- 
-firstcompleted = 0           
-        
-for team in teams:
+for team_folder in team_folder_list:
+
+    team = int(team_folder.strip('Team '))
+    os.chdir(data_directory + '\\' + team_folder)
+    session_folder_list = glob('cruse-*')
+
     for session in sessions:
-        
-        print('Team ' + str(team))
+
+        session_folder = session_folder_list[session-1]  # minus 1 to match indexing
+        os.chdir(data_directory + '\\' + team_folder + '\\' + session_folder)
+
+        condlist_criteria = (df_condlist['Team'] == team)
+        integration_condition = df_condlist[condlist_criteria][('Session' + str(session) + '_Intcond')].iloc[0]
+        scenario_num = str(df_condlist[condlist_criteria][('Session' + str(session) + '_Scenario')].iloc[0])
+        condition_label = integration_condition + '_' + scenario_num
+
+        print(team_folder)
         print('Session ' + str(session))
-        flagfile.write('Team ' + str(team) + 'Session ' + str(session) + '\n')
-        
-        clcrit = (df_condlist['Team']==team)
-        datafolder = df_condlist[clcrit][('Session' + str(session) + '_Directory')].iloc[0]
-        intcond = df_condlist[clcrit]['Integration'].iloc[0]
-        DRTcond = df_condlist[clcrit][('Session' + str(session) + '_DRTcond')].iloc[0]
-        scennum = str(df_condlist[clcrit][('Session' + str(session) + '_Scenario')].iloc[0])
-        
-        condlabel = intcond + '_' + DRTcond + '_' + scennum
-        datadir = (maindir + r'\Team ' + str(team) + '\\' + datafolder)
-        os.chdir(datadir)
-        print(datadir)
-        flagfile.write(datadir + '\n')
-        
+        print(session_folder)
+
+        flagfile.write(team_folder + '\n')
+        flagfile.write('Session ' + str(session) + '\n')
+        flagfile.write(session_folder + '\n')
+
         # Clear flags
         rangeFlag = 0
         bearerrFlag = 0
@@ -72,18 +91,26 @@ for team in teams:
         multisolFlag = 0
         
         # Import necessary files into dataframes
-        df_sl = pd.read_csv('solution_legs.csv') # All solutions entered. Includes initial solution set by sonar
-        df_ts = pd.read_csv('target_solution.csv') # Ground truth for every vessel every 20s
-        df_nav = pd.read_csv('navdata.csv') # Ownship nagivation data. Updated every 1s
-        df_cn = pd.read_csv('contacts.csv') # Contact timing info
-        df_eh = pd.read_csv('entity_history.csv') # Included sonar tracker data
-        df_st = pd.read_csv('sonar_tracks.csv') # Sonar TID and SCID initiation
-        df_ann = pd.read_csv('annotations.csv') # TPC and Sonar annotations
-        df_atw = pd.read_csv('atwit.csv') # atwit scores
-        df_atw = df_atw[df_atw.aw_console != 'COMMAND'].copy() # remove rows from console "command" 
-        df_atw['aw_workload'] = df_atw['aw_workload'].replace(999,np.NaN) # replace 999 with NA
-        
-### DATA CLEANING AND PREP 
+        df_sl = pd.read_csv('solution_legs.csv')  # All solutions entered. Includes initial solution set by sonar
+        df_ts = pd.read_csv('target_solution.csv')  # Ground truth for every vessel every 20s
+        df_nav = pd.read_csv('navdata.csv')  # Ownship nagivation data. Updated every 1s
+        df_cn = pd.read_csv('contacts.csv')  # Contact timing info
+        df_eh = pd.read_csv('entity_history.csv')  # Included sonar tracker data
+        df_st = pd.read_csv('sonar_tracks.csv')  # Sonar TID and SCID initiation
+        df_ann = pd.read_csv('annotations.csv')  # TPC and Sonar annotations
+        df_atw = pd.read_csv('atwit.csv')  # atwit scores
+        df_atw = df_atw[df_atw.aw_console != 'COMMAND'].copy()  # remove rows from console "command"
+        df_atw['aw_workload'] = df_atw['aw_workload'].replace(999, np.NaN)  # replace 999 with NA
+
+        # Get console/operator names used in this experiment from data
+        consoles = pd.unique(df_atw['aw_console'])
+        consoles.sort()
+
+        # DON'T REALLY NEED THIS ANYMORE Get vessel names used in this experiment from data
+        #classifications = pd.unique(df_eh['eh_classification'])
+        #classifications.sort()
+
+        ### DATA CLEANING AND PREP
         df_sl = df_sl[df_sl.sl_console != 'TPC'].copy() # remove any new visual contacts initiated by TPC 
         ts_all_cons = pd.unique(df_ts['ts_id']) 
         ts_all_n = ts_all_cons.size   #total number of contacts listed in TS, including those not yet detected
@@ -191,7 +218,9 @@ for team in teams:
             # $%$%$%$% MAYBE DONE OUTSIDE THE LOOP???
             sstcrit = (df_sst['Con']==df_sl.loc[sl,'sl_ts_id'])
             df_sl.loc[sl,'sl_ts_classification'] = df_sst.loc[sstcrit]['Class'].iloc[0]
-            df_sl.loc[sl,'sl_class_weight'] = classweightdict.get(df_sl.loc[sl,'sl_ts_classification'], "none")
+            # Get the broad classification category (Merchant, Fishing, Warship) to match to weighting dictionary
+            classification_category = df_sl.loc[sl,'sl_ts_classification'].split(' ', 1)[0]
+            df_sl.loc[sl,'sl_class_weight'] = classification_weights_dict.get(classification_category, "none")
                 
             # Range
             rangebin = np.ceil(df_sl.loc[sl,'sl_ts_range']/next(iter(rangeweightdict)))*next(iter(rangeweightdict)) # Divides by the smallest range, rounds to the ceiling, then multiplies by the smallest range
@@ -219,7 +248,8 @@ for team in teams:
         df_sl['sl_RT'] = df_sl['sl_time'] - df_sl['sl_SCID_detect_time']
         
         # TMA RT: Time since the last solution (by each TMA)
-        for tma in [1,2]:
+        TMA_count = sum('TMA' in console for console in consoles)  # Count how many TMAs
+        for tma in range(1,TMA_count+1):
             tmaname = 'TMA' + str(tma)
             tmacrit= (df_sl['sl_console']==tmaname)
             tmatime = df_sl.loc[tmacrit]['sl_time']
@@ -269,14 +299,13 @@ for team in teams:
 # 13. Save original data then remove remove outliers                       
                          
         # Save all data include sonar solutions and outliers
-        df_son.to_csv('son_%s.csv' % condlabel)
-        df_sl.to_csv('sl_all_%s.csv' % condlabel)
+        df_son.to_csv('son_%s.csv' % condition_label)
+        df_sl.to_csv('sl_all_%s.csv' % condition_label)
         
-        df_sl['sl_team']  = team
+        df_sl['sl_team']= team
         df_sl['sl_session'] = session
-        df_sl['sl_integ'] = intcond 
-        df_sl['sl_DRT'] = DRTcond
-        df_sl['sl_scen'] = scennum       
+        df_sl['sl_integ'] = integration_condition
+        df_sl['sl_scen'] = scenario_num       
         
         # 11.  Combine data across teams
         if firstcompleted == 0:
@@ -309,7 +338,7 @@ for team in teams:
             
         # Save final solution data
         df_sl = df_sl.reset_index(drop=True)
-        df_sl.to_csv('sl_sonaroutliers_%s.csv' % condlabel) 
+        df_sl.to_csv('sl_sonaroutliers_%s.csv' % condition_label) 
             
         # Sonar outliers
         rangecrit = (df_sl['sl_range'] <= sonarrange)
@@ -323,7 +352,7 @@ for team in teams:
         
 # Save final solution data
         df_sl = df_sl.reset_index(drop=True)
-        df_sl.to_csv('sl_%s.csv' % condlabel) 
+        df_sl.to_csv('sl_%s.csv' % condition_label) 
         
         # 11.  Combine data across teams
         if firstcompleted == 0:
@@ -332,7 +361,7 @@ for team in teams:
         else:
             df_sl_allscenarios = df_sl_allscenarios.append(df_sl)
         
-os.chdir(maindir)        
+os.chdir(data_directory)        
 #df_sl_allscenarios.to_csv('SL_allscenarios.csv') 
 #df_sl_all_allscenarios.to_csv('SL_all_allscenarios.csv') 
        
