@@ -37,23 +37,23 @@ df_sst = pd.read_csv('Sonar_start_time.csv')  # Get sonar start times
 
 # Set up variables used for all analysis
 sessions = [1,2]
-exclRToutliers = True #set to 1 to exclude solutions that are made too quickly from last solution
-exclsonaroutliers = True # set to 1 to exclude any solutions that set the range beyond what sonar can detect   
-exclbearoutliers = True # set to 1 to exclude any solutions with bearing errors outside bearerrmax    
+exclude_RT_outliers = True #set to 1 to exclude solutions that are made too quickly from last solution
+exclude_sonar_outliers = True # set to 1 to exclude any solutions that set the range beyond what sonar can detect
+exclude_bearing_outliers = True # set to 1 to exclude any solutions with bearing errors outside bearerrmax
 endtime = 3700  # total number of seconds to look at
-tpdur = 20  # number of seconds per time point
-tpnum = int(endtime / tpdur)
+timepoint_secs = 20  # number of seconds per time point
+timepoint_number = int(endtime / timepoint_secs)
 ypm = 33.756  # Yards per minute travelling at 1 knot = 33.756
-pointsrange = .33  # Solution must be within this proportion of range in order # to score a point
-zigdegrees = 30  # How many degrees change in course to qualify for a zig
-sonarrange = 30000  # Max range for detection (as told to participants)
-bearerrmax = 20  # bearing errors outside of this considered outliers
+points_range = .33  # Solution must be within this proportion of range in order # to score a point
+zig_degrees = 30  # How many degrees change in course to qualify for a zig
+sonar_range = 30000  # Max range for detection (as told to participants)
+bearing_error_max = 20  # bearing errors outside of this considered outliers
 minRT = 10  # minimum allowable time since last solution
 # Weights from highest 3 to lowest 1 CLASSIFICATION BELOW
 classification_weights_dict = {'Warship': 3, 'Fishing': 2, 'Merchant': 1}
-rangeweightdict = {5000: 3, 10000: 2, 15000: 1}
-courseweightdict = {'Closing': 3, 'Opening': 1}
-zigweightdict = {'Zigging': 3, 'Notzigging': 1}
+range_weights_dict = {5000: 3, 10000: 2, 15000: 1}
+course_weights_dict = {'Closing': 3, 'Opening': 1}
+zig_weights_dict = {'Zigging': 3, 'Notzigging': 1}
 
 firstcompleted = 0
 
@@ -144,7 +144,7 @@ for team_folder in team_folder_list:
         df_sl['sl_post_time'] = np.ceil(df_sl['sl_time']/20)*20
         df_sl['sl_ts_id'] = 0
         
-# 4. For each SL contact, find the closest TS current visitble
+# 4. For each SL contact, find the closest TS current visible
         for sl_id in sl_all_cons: 
             slcrit = (df_sl['sl_sid']==sl_id)
             slc_bearing = df_sl.loc[slcrit]['sl_bearing'].iloc[0] # Take the bearing of the initial (sonar) solution
@@ -223,14 +223,14 @@ for team_folder in team_folder_list:
             df_sl.loc[sl,'sl_class_weight'] = classification_weights_dict.get(classification_category, "none")
                 
             # Range
-            rangebin = np.ceil(df_sl.loc[sl,'sl_ts_range']/next(iter(rangeweightdict)))*next(iter(rangeweightdict)) # Divides by the smallest range, rounds to the ceiling, then multiplies by the smallest range
-            df_sl.loc[sl,'sl_range_weight'] = rangeweightdict.get(rangebin, 1) # Alternative is 1 = range larger than used here
+            rangebin = np.ceil(df_sl.loc[sl,'sl_ts_range'] / next(iter(range_weights_dict))) * next(iter(range_weights_dict)) # Divides by the smallest range, rounds to the ceiling, then multiplies by the smallest range
+            df_sl.loc[sl,'sl_range_weight'] = range_weights_dict.get(rangebin, 1) # Alternative is 1 = range larger than used here
             
             # Course (Closing = positive timeCPA, opening = negative timeCPA)
             if df_ts[tsrowcrit]['ts_timecpa'].iloc[0] > 0:
-                df_sl.loc[sl,'sl_course_weight'] = courseweightdict.get('Closing', "none")
+                df_sl.loc[sl,'sl_course_weight'] = course_weights_dict.get('Closing', "none")
             else: 
-                df_sl.loc[sl,'sl_course_weight'] = courseweightdict.get('Opening', "none")
+                df_sl.loc[sl,'sl_course_weight'] = course_weights_dict.get('Opening', "none")
             # Zig: Get later from the solutionleg_over_time data
 
 # 10. Calculate error
@@ -319,12 +319,12 @@ for team_folder in team_folder_list:
             
         
         # Bearig error outliers
-        bearcrit = (df_sl['sl_bearingError'] <= bearerrmax)
-        if df_sl['sl_bearingError'].max() > bearerrmax:
+        bearcrit = (df_sl['sl_bearingError'] <= bearing_error_max)
+        if df_sl['sl_bearingError'].max() > bearing_error_max:
             outbears = list(df_sl.loc[~bearcrit]['sl_bearingError'])
             flagfile.write('*** FLAG *** Bearing error outside max: ' + str(outbears) + '\n')
             bearerrFlag += len(outbears)
-        if exclbearoutliers:
+        if exclude_bearing_outliers:
             df_sl = df_sl.loc[bearcrit].copy()
         
         # Remove RT outliers
@@ -333,7 +333,7 @@ for team_folder in team_folder_list:
             outRTs = list(df_sl.loc[~RTcrit]['sl_tmaRT'])
             flagfile.write('*** FLAG *** Faster solution RT: ' + str(outRTs) + '\n')
             rtFlag += len(outRTs)
-        if exclRToutliers:
+        if exclude_RT_outliers:
             df_sl = df_sl.loc[RTcrit].copy()
             
         # Save final solution data
@@ -341,15 +341,15 @@ for team_folder in team_folder_list:
         df_sl.to_csv('sl_sonaroutliers_%s.csv' % condition_label) 
             
         # Sonar outliers
-        rangecrit = (df_sl['sl_range'] <= sonarrange)
-        if df_sl['sl_range'].max() > sonarrange: #If at least one outside range
+        rangecrit = (df_sl['sl_range'] <= sonar_range)
+        if df_sl['sl_range'].max() > sonar_range: #If at least one outside range
             outranges = list(df_sl.loc[~rangecrit]['sl_range'])
             print('*** FLAG *** Solutions outside sonar range: ' + str(outranges) + '\n')
             flagfile.write('*** FLAG *** Solutions outside sonar range: ' + str(outranges) + '\n')
             rangeFlag += len(outranges)
-        if exclsonaroutliers:
+        if exclude_sonar_outliers:
             df_sl = df_sl.loc[rangecrit].copy()           
-        
+
 # Save final solution data
         df_sl = df_sl.reset_index(drop=True)
         df_sl.to_csv('sl_%s.csv' % condition_label) 
