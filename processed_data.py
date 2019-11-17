@@ -12,6 +12,8 @@ import pandas as pd
 import numpy as np
 import constants
 from analysis_tools import bearingError
+import warnings
+from sys import exit
 
 class ProcessedData:
     """
@@ -29,34 +31,32 @@ class ProcessedData:
         self.session = kwargs.get('session', 'none')
         self.directory = kwargs.get('directory', 'none')
 
-        if (self.team != 'none') and (self.session != 'none'):
-            self._get_data_by_team()
-        elif self.directory != 'none':
-            self._get_data_by_directory()
-        else:
-            print('Please enter the team and session or the directory')  # Work out how to do this as an exception
+        if self.directory == 'none':
+            self._get_directory_name()
+        if self.team != 'none':
+            self.team = 999
+            self.session = 999
 
+        self._get_raw_data()
         self._clean_solution_legs()
         self._match_solutions_to_truth()
         self._get_position_error()
 
-    def _get_data_by_team(self):
-        chdir(self.data_directory + '\\Team ' + str(self.team))
-        session_folder = glob('cruse-*')[self.session - 1]
-        print(session_folder)
-        self.directory = (self.data_directory + '\\Team ' + str(self.team) + '\\' + session_folder)
-        chdir(self.directory)
-        self.solution_legs = pd.read_csv('solution_legs.csv')  # TMA solutions
-        self.ground_truth = pd.read_csv('target_solution.csv')  # Ground truth for each vessel every 20s
-        self.ownship = pd.read_csv('navdata.csv')  # Ownship navigation data. Updated every 1s
+    def _get_directory_name(self):
+        try:
+            chdir(self.data_directory + '\\Team ' + str(self.team))
+            session_folder = glob('cruse-*')[self.session - 1]
+            print(session_folder)
+            self.directory = (self.data_directory + '\\Team ' + str(self.team) + '\\' + session_folder)
+        except FileNotFoundError:
+            missing_input_error = 'Please include the team + session number or the data folder name as input'
+            warnings.warn(missing_input_error)
+            exit()
 
-    def _get_data_by_directory(self):
+    def _get_raw_data(self):
         chdir(self.data_directory)
         chdir(self.directory)
-        self.team = 999  # Dummy number for team
-        self.session = 1
         self.solution_legs = pd.read_csv('solution_legs.csv')  # TMA solutions
-
         self.ground_truth = pd.read_csv('target_solution.csv')  # Ground truth for each vessel every 20s
         self.ownship = pd.read_csv('navdata.csv')  # Ownship navigation data. Updated every 1s
 
@@ -103,14 +103,15 @@ class ProcessedData:
 
             # Flag anything weird going on here
             if min(bearing_differences) > 1:
-                print('SCID assigned to a contact with bearing error greater than 1: TS' +
-                      str(truth_id) + ' SL' + str(solution_id) + ' Bearing error ' + str(min(bearing_differences)))
+                bearing_error_warning = ('Solution ' + str(solution_id) + ' assigned to truth contact ' + str(truth_id)
+                                         + ' with large bearing error of ' + str(round(min(bearing_differences), 1)))
+                warnings.warn(bearing_error_warning)
             if len([b for b in bearing_differences if b <= 1]) > 1:  # Check if multiples truths within 1 degree
                 index_list = [i for i, value in enumerate(bearing_differences) if value < 1]
-                print('Two possible contacts within 1 degree of initial solution: SL' + str(solution_id))
-                print([visible_truth_ids[i] for i in index_list])
-
-        print(np.unique(self.solution_legs['sl_truth_id']))
+                multiple_contacts_warning = ('Solution ' + str(solution_id) + ' within 1 degree of multiple contacts at'
+                                             + ' time of assignment. Assigned to truth contact ' + str(truth_id)
+                                             + ' but close to ' + str([visible_truth_ids[i] for i in index_list]))
+                warnings.warn(multiple_contacts_warning)
 
 
     def _get_position_error(self):
@@ -168,7 +169,8 @@ class ProcessedData:
 
 if __name__ == '__main__':
     fred = ProcessedData(directory='cruse-20190520-131452')
-    fred.solution_legs.to_csv('test_sl_output.csv')
+    #fred = ProcessedData()
+    #fred.solution_legs.to_csv('test_sl_output.csv')
     fred.__repr__()
 
 
