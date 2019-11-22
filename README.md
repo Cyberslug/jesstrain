@@ -1,2 +1,2 @@
 # jesstrain
-Training for Jess
+Training for Jess and David
