@@ -21,8 +21,13 @@ class ProcessedData:
     Holds all pre-processed data
     """
     # TODO work out where to put these below. Contants.py?
+    # TODO - MY ANSWER, I think that they should be passed to this class on instantiation and saved in a variable
+    #  Also I don't think that they are class variables, I think they are instance variables as they are not 
+    #  an intrinsic property of the class. The source of this information could be either a parameter to the 
+    #  run command or else a parameter in a .ini or .json file  
     data_directory = 'C:\\Users\\jesir\\PycharmProjects\\data'  # Name of the main data directory
     chdir(data_directory)
+    # The following file name should be in a configuration file i.e. a .ini file
     sonar_start_times = pd.read_csv('Sonar_start_time.csv')  # time each contact visual on sonar
 
     def __init__(self, **kwargs):  # Allow options for input by team/session or bya single output folder
