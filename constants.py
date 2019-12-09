@@ -29,6 +29,7 @@ range_weights_dict = {5000: 3, 10000: 2, 15000: 1}
 course_weights_dict = {'Closing': 3, 'Opening': 1}
 zig_weights_dict = {'Zigging': 3, 'Notzigging': 1}
 
+
 exclude_RT_outliers = True #set to 1 to exclude solutions that are made too quickly from last solution
 exclude_sonar_outliers = True # set to 1 to exclude any solutions that set the range beyond what sonar can detect
 exclbearoutliers = True # set to 1 to exclude any solutions with bearing errors outside bearerrmax

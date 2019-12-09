@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 # @Filename : processed_data.py
 # @Version : 0.0
-# @Date : 2019-10-20-14-50
+# @Date : 2019-11-24-10-02
 # @Project: jesstrain
 # @AUTHOR : david & jessir
 
@@ -15,11 +15,11 @@ from analysis_tools import bearingError
 import warnings
 from sys import exit
 
+
 class ProcessedData:
     """
     Holds all pre-processed data
     """
-    class_var1 = 1  # define class vars here
     # TODO work out where to put these below. Contants.py?
     data_directory = 'C:\\Users\\jesir\\PycharmProjects\\data'  # Name of the main data directory
     chdir(data_directory)
@@ -41,6 +41,8 @@ class ProcessedData:
         self._clean_solution_legs()
         self._match_solutions_to_truth()
         self._get_position_error()
+        self._get_response_time()
+        self.process_sonar_data()
 
     def _get_directory_name(self):
         try:
@@ -59,6 +61,11 @@ class ProcessedData:
         self.solution_legs = pd.read_csv('solution_legs.csv')  # TMA solutions
         self.ground_truth = pd.read_csv('target_solution.csv')  # Ground truth for each vessel every 20s
         self.ownship = pd.read_csv('navdata.csv')  # Ownship navigation data. Updated every 1s
+        self.sonar = pd.read_csv('sonar_tracks.csv')  # Sonar tracks data
+        self.user_interactions = pd.read_csv('user_interactions.csv')  # User interactions by each operator.
+
+        self.consoles = pd.unique(self.user_interactions['ui_hmi'])
+        self.consoles.sort()
 
     def _clean_solution_legs(self):
         # Some of this is likely to be specific to individual experiments
@@ -113,7 +120,6 @@ class ProcessedData:
                                              + ' but close to ' + str([visible_truth_ids[i] for i in index_list]))
                 warnings.warn(multiple_contacts_warning)
 
-
     def _get_position_error(self):
         for sl, sl_row in self.solution_legs.iterrows():
             truth_id = sl_row['sl_truth_id']
@@ -135,42 +141,65 @@ class ProcessedData:
 
             # TODO possibly make position error function if use more than here.
             self.solution_legs.loc[sl, 'Position Error'] = np.linalg.norm([(truth_x - solution_x),
-                                                                       (truth_y - solution_y)])
+                                                           (truth_y - solution_y)])
+            self.solution_legs.loc[sl, 'Range Error'] = abs(self.ground_truth[truth_criteria].iloc[0]['ts_range'] -
+                                                        sl_row['sl_range'])
+            self.solution_legs.loc[sl, 'Speed Error'] = abs(self.ground_truth[truth_criteria].iloc[0]['ts_speed'] -
+                                                        sl_row['sl_speed'])
+            self.solution_legs.loc[sl, 'Course Error'] = bearingError(
+                                                        self.ground_truth[truth_criteria].iloc[0]['ts_course'],
+                                                        sl_row['sl_course'])
 
+    def _get_response_time(self):
+         # TODO get rid of outliers?
+        truth_ids = pd.unique(self.ground_truth['ts_id'])
+        no_sonar_subset = (self.solution_legs['sl_console'].str.contains("TMA")) # Focus on TMA solutions only
+        # For each contact, get the time taken to update solution on that contact
+        for truth_id in truth_ids:
+            truth_id_subset = (self.solution_legs['sl_truth_id'] == truth_id)
+            sierra_initiated_time = self.solution_legs[truth_id_subset].iloc[0]['sl_time']
+            # If TMA solutions exist
+            if self.solution_legs[truth_id_subset & no_sonar_subset].shape[0] > 0:
+                solution_times = self.solution_legs.loc[truth_id_subset & no_sonar_subset]['sl_time'].tolist()
+                solution_times.insert(0, sierra_initiated_time)
+                # subtract each time from previous solution time
+                update_rts = [x - y for x, y in zip(solution_times[1:], solution_times)]
+                self.solution_legs.loc[truth_id_subset & no_sonar_subset, 'sl_update_RT'] = update_rts
+                # Count number updates
+                self.solution_legs.loc[truth_id_subset & no_sonar_subset, 'sl_update_count'] = \
+                    range(1, len(update_rts) + 1)
+        # RT for each TMA operator
+        tma_count = sum('TMA' in console for console in self.consoles)  # Count how many TMAs
+        for tma in range(1,tma_count+1):
+            tma_subset = (self.solution_legs['sl_console'].str.contains('TMA' + str(tma)))
+            if self.solution_legs[tma_subset].shape[0] > 1: # Must be more than 1 solution
+                tma_times = self.solution_legs.loc[tma_subset]['sl_time'].tolist()
+                tma_rts = [x - y for x, y in zip(tma_times[1:], tma_times)]
+                tma_rts.insert(0, np.nan)
+                self.solution_legs.loc[tma_subset, 'sl_TMA_RT'] = tma_rts
 
+    # Don't make this one obligatory?
+    def _process_sonar_data(self):
+        truth_ids = pd.unique(self.ground_truth['ts_id'])
+        # Find closest ground truth
+        for truth_id in truth_ids:
+            sonar_subset = (self.sonar['st_entity_id'] == truth_id)
+            solution_subset = (self.solution_legs['sl_truth_id'] == truth_id)
+            # Find time that tracker ID initiated
+            if self.solution_legs.loc[solution_subset].shape[0] > 0:  # If any TIDs assigned
+                self.solution_legs.loc[solution_subset, 'sl_sonar_detect_time'] = \
+                    self.sonar[sonar_subset].iloc[0]['st_init_time']
+                # Choose the time of the first TID
+                self.solution_legs.loc[solution_subset, 'sl_sierra_initiated_time'] = \
+                    self.solution_legs[solution_subset].iloc[0]['sl_time']
 
-    # Playing around with other things:
-    @property  # Defined like property but acts like attribute. Allows var to be updated after init
-    def set_property(self):
-        pass
-
-    def __repr__(self):  # Call with instance.__repr__()
-        return 'Directory {}'.format(self.directory)
-
-    def __str__(self):
-        return 'Analysing data from {}'.format(self.directory)
-
-
-    @classmethod  # Method applied to entire class - might be useful if need to upload constant to entire class...?
-    def do_class_method(cls):
-        cls.class_var1 = 3
-
-    @staticmethod  # Doesn't take class or instance as argument
-    def do_static_method():
-        pass
-
-
-# print(instance.__dict__) shows the instance vars
-# print(Class.__dict__) shows the class vars
-# Can change class var for the entire class (e.g. ProcessedData.class_var1 = 2) and will change for all instance, even
-# if called after the instances are instantiated
-# Can call class vars for instance and will inherit from class. BUT if change the class var for that instance, will set
-# the var with that instance and won't inherit the one from class
 
 if __name__ == '__main__':
-    fred = ProcessedData(directory='cruse-20190520-131452')
+    #fred = ProcessedData(directory='TMAonly')
+    jan = ProcessedData(team=17, session=1)
+    #print(jan.solution_legs.head())
+    #pass
     #fred = ProcessedData()
-    #fred.solution_legs.to_csv('test_sl_output.csv')
-    fred.__repr__()
+    jan.solution_legs.to_csv('test_sl_output.csv')
 
 
